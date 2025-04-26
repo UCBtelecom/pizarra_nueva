@@ -1,0 +1,96 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Pizarra Interactiva con Chat en Tiempo Real</title>
+    <style>
+        body { display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+        h1 { margin-bottom: 10px; }
+        .container { display: flex; gap: 20px; }
+        canvas { border: 2px solid #000; cursor: crosshair; }
+        .chat-container { display: flex; flex-direction: column; width: 300px; border: 2px solid #000; padding: 10px; height: 500px; overflow-y: auto; }
+        .chat-messages { flex: 1; overflow-y: auto; margin-bottom: 10px; }
+        input { padding: 8px; width: calc(100% - 16px); margin-bottom: 5px; }
+        button { padding: 8px 16px; font-size: 16px; margin-top: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Pizarra Interactiva con Chat en Tiempo Real</h1>
+    <div class="container">
+        <div>
+            <canvas id="pizarra" width="800" height="500"></canvas>
+            <button onclick="limpiarPizarra()">Limpiar</button>
+        </div>
+        <div class="chat-container">
+            <div class="chat-messages" id="chatMessages"></div>
+            <input type="text" id="chatInput" placeholder="Escribe un mensaje...">
+            <button onclick="enviarMensaje()">Enviar</button>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+
+        const canvas = document.getElementById('pizarra');
+        const ctx = canvas.getContext('2d');
+        let dibujando = false;
+
+        canvas.addEventListener('mousedown', (event) => {
+            dibujando = true;
+            ctx.beginPath();
+            ctx.moveTo(event.offsetX, event.offsetY);
+            socket.emit('inicioDibujo', { x: event.offsetX, y: event.offsetY });
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            dibujando = false;
+            socket.emit('finDibujo');
+        });
+
+        canvas.addEventListener('mousemove', (event) => {
+            if (!dibujando) return;
+            ctx.lineTo(event.offsetX, event.offsetY);
+            ctx.stroke();
+            socket.emit('dibujando', { x: event.offsetX, y: event.offsetY });
+        });
+
+        socket.on('inicioDibujo', (data) => {
+            ctx.beginPath();
+            ctx.moveTo(data.x, data.y);
+        });
+
+        socket.on('dibujando', (data) => {
+            ctx.lineTo(data.x, data.y);
+            ctx.stroke();
+        });
+
+        socket.on('limpiarPizarra', () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        });
+
+        function limpiarPizarra() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            socket.emit('limpiarPizarra');
+        }
+
+        const input = document.getElementById('chatInput');
+        const mensajes = document.getElementById('chatMessages');
+
+        function enviarMensaje() {
+            if (input.value.trim() !== '') {
+                socket.emit('mensajeChat', input.value);
+                input.value = '';
+            }
+        }
+
+        socket.on('mensajeChat', (mensaje) => {
+            const nuevoMensaje = document.createElement('div');
+            nuevoMensaje.textContent = mensaje;
+            mensajes.appendChild(nuevoMensaje);
+            mensajes.scrollTop = mensajes.scrollHeight;
+        });
+    </script>
+</body>
+</html>
